@@ -1,37 +1,24 @@
-# settings.py (Channels config)
+# asgi.py
+import os
+from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+from channels.security.websocket import AllowedHostsOriginValidator
 
-INSTALLED_APPS = [
-    # ... other apps ...
-    "daphne",
-    "channels",
-    "rest_framework",
-]
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 
-# ASGI setup
-ASGI_APPLICATION = "myproject.asgi.application"
+django_asgi_app = get_asgi_application()
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-            # Scaling config
-            "capacity": 2500,  # Max events in buffer
-            "expiry": 10,       # Message expiry (seconds)
-        },
-    },
-}
+from myapp.consumers import DashboardConsumer
+from django.urls import path
 
-# WebSocket settings
-WEBSOCKET_ACCEPT_ALL = False  # Require explicit accept()
-
-# Cache for presence tracking
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
-    }
-}
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
+    "websocket": AllowedHostsOriginValidator(
+        AuthMiddlewareStack(
+            URLRouter([
+                path("ws/dashboard/<str:room_id>/", DashboardConsumer.as_asgi()),
+            ])
+        )
+    ),
+})
